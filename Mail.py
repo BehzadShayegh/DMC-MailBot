@@ -44,14 +44,19 @@ class Mail :
         with open(self.log_folder+self.send_time, 'w') as f :
             f.write(text)
 
-    def send(self, sender) :
+    def send(self, sender, just_record=False, received=False) :
         if not self.is_ready() :
             return "mail is not ready!"
         message = MIMEMultipart()
-        message['From'] = sender.sender
-        message['To'] = self.receiver
+        if received :
+            message['From'] = self.receiver
+            message['To'] = sender.receiver
+        else :
+            message['From'] = sender.sender
+            message['To'] = self.receiver
         message['Subject'] = self.title
         message.attach(MIMEText(self.body, 'plain'))
+        record_text = message.as_string()
         if self.have_file :
             attach_file = open(self.file, 'rb')
             payload = MIMEBase('application', 'octate-stream')
@@ -59,12 +64,17 @@ class Mail :
             encoders.encode_base64(payload)
             payload.add_header('Content-Disposition', 'attachment', filename=self.file_name)
             message.attach(payload)
+            record_text += "\n attach_file="+self.file_name
+        if just_record :
+            self.send_time = time.ctime()
+            if self.log : self.record(record_text)
+            return self.send_time
+        text = message.as_string()
         session = smtplib.SMTP('smtp.gmail.com', 587)
         session.starttls()
         session.login(sender.sender, sender.password)
-        text = message.as_string()
         session.sendmail(sender.sender, self.receiver, text)
         session.quit()
         self.send_time = time.ctime()
-        if self.log : self.record(text)
+        if self.log : self.record(record_text)
         return self.send_time
