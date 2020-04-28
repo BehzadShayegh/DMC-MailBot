@@ -7,5 +7,5 @@ class MailSender :
         self.sender = sender
         self.password = password
 
-    def send(self, mail, index=-1) :
+    def send(self, mail) :
         t = mail.send(self)

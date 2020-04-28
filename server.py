@@ -23,11 +23,9 @@ class server :
     def listen(self) :
         while True:
             g = self.receiver.get()
-            m = Mail("Hey there!")
-            m.set_body("fuck")
-            m.receiver(g.receiver)
-            self.sender.send(m,3)
             print(g.body)
+            g.set_body("Fuck")
+            self.sender.send(g)
 
 s = server('ut.discretemathematics@gmail.com', 'DM99forever')
 s.listen()
