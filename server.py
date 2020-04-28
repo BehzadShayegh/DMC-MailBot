@@ -21,10 +21,13 @@ class server :
             m.set_file("./SSD")
 
     def listen(self) :
-        while True
-        g = r.get()
-        s.send(m,3)
-        print(g)
-        print(g.body)
+        while True:
+            g = self.receiver.get()
+            m = Mail("Hey there!")
+            m.set_body("fuck")
+            m.receiver(g.receiver)
+            self.sender.send(m,3)
+            print(g.body)
 
 s = server('ut.discretemathematics@gmail.com', 'DM99forever')
+s.listen()
