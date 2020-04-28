@@ -1,7 +1,10 @@
 import email
 import imaplib
 import time
-class mailReader:
+import os
+import sys
+
+class MailReader:
     def __init__(self,email,password):
         """
         input your gmail and password and let us take care of the rest.
@@ -36,7 +39,23 @@ class mailReader:
 
                     mail_from = message['from']
                     mail_subject = message['subject']
-
+                    for part in message.walk():
+                        fileName = part.get_filename()
+                        if bool(fileName):
+                            detach_dir = '.'
+                            fileName = time.ctime()
+                            filePath = os.path.join(detach_dir, 'attachments', fileName)
+                            print ('filename : ' + filePath)
+                            try:
+                                fp = open(filePath, 'wb')
+                                fp.write(part.get_payload(decode=True))
+                                fp.close()
+                            except:
+                                os.mkdir('./attachments')
+                                fp = open(filePath, 'wb')
+                                fp.write(part.get_payload(decode=True))
+                                fp.close()
+                            
                     # from its annexes to get the text
                     if message.is_multipart():
                         mail_content = ''
@@ -56,7 +75,7 @@ class mailReader:
                     print(f'Content: {mail_content}')
 
 
-mail = mailReader('ut.discretemathematics@gmail.com', 'DM99forever')
+mail = MailReader('ut.discretemathematics@gmail.com', 'DM99forever')
 while (1):
     time.sleep(10)
     mail.checkForNewEmail()
