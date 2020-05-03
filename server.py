@@ -9,12 +9,13 @@ from Mail import Mail
 import pandas as pd
 import numpy as np
 import random
+import sys
 from math import floor
 
 class server :
     def __init__(self, Email, password, attachments_path='./received_attachments/', log_path='./mails_log/') :
         #configurations
-        self.number_of_questions = [1,0,0,0]                           #please state how many questions we have.
+        self.number_of_questions = [3,0,0,0]                           #please state how many questions we have.
         self.admins_commands = ['/start','/log']
         #end of configurations
         self.Email = Email
@@ -35,10 +36,14 @@ class server :
 
     def listen(self) :
         while True:
+            # try:
             new_mail = self.receiver.get()
             new_mail.receiver = self.extract_email(new_mail)
             print('new mail form : ' + new_mail.receiver)
             self.handle_new_mail(new_mail)
+            # except:
+            #     e = sys.exc_info()[0]
+            #     print(str(e))
 
 
     
@@ -46,14 +51,18 @@ class server :
         self.df = pd.read_csv('user_database.csv')
         self.tas = pd.read_csv('ta_database.csv')
         authentication = self.is_email_address_valid(new_mail.receiver)
+        print('authentication : ' + str(authentication))
         if (authentication):
-            validate_command(new_mail,authentication)
+            self.validate_command(new_mail,authentication)
         else:
             print('Authentication failed for : ' + new_mail.receiver + '\n')
             self.send_failed_authentication(new_mail)
 
     def validate_command(self,mail,authentication):
-        body = self.body
+        body = mail.body
+        print(body)
+        sliced_body = body.split()
+        print(sliced_body)
         if (str(sliced_body[0])[0] != '/'):
             self.send_invalid_format(mail)
             print('Command was not valid.\n')
@@ -64,11 +73,12 @@ class server :
 
     def check_permission (self,command,sliced_body,mail,authentication,body):
         #TODO: Fix this Later
+        command = command.strip().lower()
         if ((command == '/start' or command == '/log') and authentication != 3):
             self.send_permission_denied(mail)
             print('command : "'+ command + '". Permission Denied.')
             return
-        elif (command == 'grade' and authentication != 2):
+        elif (command == '/grade' and authentication != 2):
             self.send_permission_denied(mail)
             print('command : "'+ command + '". Permission Denied.')
             return
@@ -79,21 +89,22 @@ class server :
         #TODO: complete this.
         if (command == '/status'):
             self.send_status(mail)
-        elif (command == '/buy'):
+        elif (command == '/buy' and len(sliced_body) > 1):
             self.buy_question(sliced_body,mail)
-        elif (command == '/sell'):
+        elif (command == '/sell' and len(sliced_body) > 1):
             self.sell_question(sliced_body,mail)
         elif (command == '/commands'):
             self.send_commands(mail)
-        elif (command == '/submit'):
+        elif (command == '/submit' and len(sliced_body) > 1):
             self.submit_question(sliced_body,mail)
-        elif (command == '/grade'):
+        elif (command == '/grade' and len(sliced_body) > 2):
             self.grade_question(sliced_body,mail,body)
         else:
+            print('command was : ' + command + '  it was invalid')
             self.send_invalid_format(mail)
         
     def grade_question(self,sliced_body,mail,body):
-        question_name = str(sliced_body[1]).lower()
+        question_name = str(sliced_body[1]).lower().strip()
         difficulty = self.switch_question_name(question_name)
         a = body.find('<')
         b = body.find('>')
@@ -103,9 +114,9 @@ class server :
         feedback = body[a+1:b]
         if (difficulty == -1):
             return
-        user_email = str(sliced_body[2]).lower()
+        user_email = str(sliced_body[2]).lower().strip()
         ta_email = mail.receiver
-        question_stat = str(sliced_body[3]).lower()
+        question_stat = str(sliced_body[3]).lower().strip()
         configure = pd.read_csv('question_configuration.csv')
         configure = configure.loc[difficulty,:]
         index = self.find_users_index(mail)
@@ -136,13 +147,16 @@ class server :
             self.send_invalid_format(mail)
 
     def submit_question(self,sliced_body,mail):
-        question_name = str(sliced_body[1]).lower()
+        if (mail.have_file == False):
+            self.send_no_file_attached(mail)
+            return
+        question_name = str(sliced_body[1]).lower().strip()
         user_index = self.find_users_index(mail)
         user = self.df.loc[user_index,:]
         question_database = pd.read_csv('question_database.csv')
         question_series = pd.Series(question_database['name']).unique()
         if (question_name in question_series):
-            index = question_database.index[df['name'] == question_name]
+            index = question_database.index[self.df['name'] == question_name]
             question = question_database[index,:]
             mail_sender = mail.receiver
             mail.receiver = question['ta_email']
@@ -174,7 +188,7 @@ class server :
         return difficulty
 
     def sell_question(self,scliced_body,mail):
-        question_name = str(scliced_body[1]).lower()
+        question_name = str(scliced_body[1]).lower().strip()
         index = self.find_users_index(mail)
         chunk = self.df.loc[index,:]
         money = int(chunk['money'])
@@ -199,10 +213,13 @@ class server :
             self.send_dont_have_question(mail)
 
     def buy_question(self,sliced_body,mail):
-        level = str(sliced_body[1]).lower()
+        level = str(sliced_body[1]).lower().strip()
         index = self.find_users_index(mail)
-        user = df.loc[index,:]
-        buyed_questions = user['buyed_questions']
+        if (index == -1):
+            self.send_email_not_found(mail)
+            print('email is not a user')
+        user = self.df.loc[index,:]
+        buyed_questions = str(user['buyed_questions'])
         money = int(user['money'])
         configure = pd.read_csv('question_configuration.csv')
         difficulty = 0
@@ -249,15 +266,17 @@ class server :
         print (mail.receiver + ' bought ' + question_name)
         buyed_questions.append(question_name)
         buyed_questions_string = self.list_to_buyedQuestions_format(buyed_questions)
-        self.change_team_status(user['team'],money,user['score'],buyed_questions_string)
+        self.change_team_status(str(user['team']),money,str(user['score']),buyed_questions_string)
         self.send_buy_successful(mail,question_name,money)
     
     
     def change_team_status(self,team_name,money,score,buyed_questions):
-        chunk = df.index[df['team'] == team_name]
-        df.loc[chunk,['money']] = money
-        df.loc[chunk,['score']] = score
-        df.loc[chunk,['buyed_questions']] = score
+        team_name = team_name.strip()
+        chunk = self.df.index[self.df['team'] == str(team_name)]
+        self.df.loc[chunk,['money']] = int(money)
+        self.df.loc[chunk,['score']] = int(score)
+        self.df.loc[chunk,['buyed_questions']] = str(buyed_questions)
+
         self.sort_df_by_score()
         self.save_df()
 
@@ -265,9 +284,9 @@ class server :
         string = ''
         for i in range(len(buyed_questions_list)):
             if (i == 0):
-                string += buyed_questions_list[i]
+                string += str(buyed_questions_list[i])
             else:
-                string += '#' + buyed_questions_list[i]
+                string += '#' + str(buyed_questions_list[i])
         return string
 
 
@@ -286,11 +305,12 @@ class server :
     
 
     def find_users_index(self,mail):
-        email_address = self.extract_email(mail)
+        email_address = mail.receiver
         user_series = pd.Series(self.df['user']).unique()
         if (email_address in user_series):
-            return self.df.index[df['user'] == email_address] 
+            return self.df[self.df['user']==email_address].index.values.astype(int)[0]
         else:
+            print(email_address + ' was not found')
             return -1
         
     def extract_email(self, mail):
@@ -303,7 +323,7 @@ class server :
         self.df = self.df.sort_values(["score"], ascending = False)
 
     def save_df(self):
-        self.df = self.df.loc[:, ~df.columns.str.contains('^Unnamed')]
+        self.df = self.df.loc[:, ~self.df.columns.str.contains('^Unnamed')]
         self.df.to_csv('./user_database.csv')
 
     def send_failed_authentication(self,mail):
@@ -325,7 +345,7 @@ class server :
         self.sender.send(mail)
 
     def send_invalid_format(self,mail):
-        mail.set_body('Invalid formant detected.\n Please note that you can view commands via "/commands".')
+        mail.set_body('Invalid format detected.\n Please note that you can view commands via "/commands".')
         mail.have_file = False
         mail.title = 'Invalid format'
         self.sender.send(mail)
@@ -356,7 +376,7 @@ class server :
 
     def send_buy_successful(self,mail,question_name,money):
         mail.set_body("You have successfully bought question "+ question_name+'.\n You now have ' + str(money) +' money left.\nYou can find the file attached to your email.\n You can submit your answer with "/submit #question_name#" and attaching your solution to the email.')
-        mail.set_file ('./questions/' + question_name)
+        mail.set_file ('./questions/' + question_name + '.pdf')
         mail.title = 'Buy Successful'
         self.sender.send(mail)
 
@@ -384,18 +404,23 @@ class server :
         mail.title = 'Commands List'
         self.sender.send(mail)
 
+    def send_no_file_attached(self,mail):
+        mail.set_body("There was no file attached to the email you sent us.\n Plese make sure you uploaded correctly and try again.")
+        mail.have_file = False
+        mail.title = 'No File Was Attached'
+        self.sender.send(mail)
+
     def send_status(self,mail):
         mail.have_file = False
         mail.title = 'Status Of The Contest'
         string = 'Contest OF DM Spring of 99\n'
         for i in range(3):
-            chunk = df.loc[i,:]
-            string += '#' + str(i+1) + ': ' + chunk['team'] + '   score : ' + str(chunk['score']) + '\n'
+            chunk = self.df.loc[i,:]
+            string += '#' + str(i+1) + ': ' + self.df['team'].iloc[i] + '   score : ' + str(self.df['score'].iloc[i]) + '\n'
         index = self.find_users_index(mail)
-        chunk = df.loc[index,:]
-        string += '\n\n You have '+ str(chunk['money']) + ' money left. your score is '+ str(chunk['score']) + '\n'
+        string += '\n\n You have '+ str(self.df['money'].iloc[index]) + ' money left. your score is '+ str(self.df['score'].iloc[index]) + '\n'
         mail.set_body(string)
         self.sender.send(mail)
-
+        
 s = server('ut.discretemathematics@gmail.com', 'DM99forever')
 s.listen()
