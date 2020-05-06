@@ -40,21 +40,23 @@ class MailReceiver:
                     m = Mail(message['subject'])
                     m.receiver(message['from'])
 
-                    for part in message.walk():
-                        if bool(part.get_filename()):
-                            fileName = self.attachments_folder+time.ctime()
-                            with open(fileName, 'wb') as f :
-                                f.write(part.get_payload(decode=True))
-                            m.set_file(fileName)
-
                     mail_content = ''  
                     if message.is_multipart():
                         for part in message.get_payload():
-                            if part.get_content_type() == 'text/plain':
-                                mail_content += part.get_payload()
+                            if part.get_content_type() == 'text/plain' or \
+                               part.get_content_type() == 'multipart/alternative' :
+                                mail_content += part.get_payload()[0].get_payload()
                     else:
                         mail_content += message.get_payload()
                     m.set_body(mail_content)
+
+                    for part in message.walk():
+                        sendedFileName = part.get_filename()
+                        if bool(sendedFileName):
+                            fileName = self.attachments_folder+time.ctime()+'=>'+sendedFileName
+                            with open(fileName, 'wb') as f :
+                                f.write(part.get_payload(decode=True))
+                            m.set_file(fileName)
 
                     if self.log :
                         m.logger(self.mails_folder)

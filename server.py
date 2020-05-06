@@ -60,10 +60,8 @@ class server :
 
     def validate_command(self,mail,authentication):
         body = mail.body
-        print(body)
         sliced_body = body.split()
-        print(sliced_body)
-        if (str(sliced_body[0])[0] != '/'):
+        if (len(body) <= 0 or str(sliced_body[0])[0] != '/'):
             self.send_invalid_format(mail)
             print('Command was not valid.\n')
             return
